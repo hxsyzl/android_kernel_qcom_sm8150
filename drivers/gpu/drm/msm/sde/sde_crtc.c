@@ -1022,26 +1022,6 @@ static bool sde_crtc_mode_fixup(struct drm_crtc *crtc,
 	return true;
 }
 
-static int _sde_crtc_get_ctlstart_timeout(struct drm_crtc *crtc)
-{
-	struct drm_encoder *encoder;
-	int rc = 0;
-
-	if (!crtc || !crtc->dev)
-		return 0;
-
-	list_for_each_entry(encoder,
-			&crtc->dev->mode_config.encoder_list, head) {
-		if (encoder->crtc != crtc)
-			continue;
-
-		if (sde_encoder_get_intf_mode(encoder) == INTF_MODE_CMD)
-			rc += sde_encoder_get_ctlstart_timeout_state(encoder);
-	}
-
-	return rc;
-}
-
 static void _sde_crtc_setup_blend_cfg(struct sde_crtc_mixer *mixer,
 	struct sde_plane_state *pstate, struct sde_format *format)
 {
@@ -3973,9 +3953,9 @@ static void sde_crtc_atomic_begin(struct drm_crtc *crtc,
 		return;
 	}
 
-	if (!crtc->state->enable) {
-		SDE_DEBUG("crtc%d -> enable %d, skip atomic_begin\n",
-				crtc->base.id, crtc->state->enable);
+	if (!crtc->state->active) {
+		SDE_DEBUG("crtc%d -> active %d, skip atomic_begin\n",
+				crtc->base.id, crtc->state->active);
 		return;
 	}
 
@@ -4019,13 +3999,7 @@ static void sde_crtc_atomic_begin(struct drm_crtc *crtc,
 	if (unlikely(!sde_crtc->num_mixers))
 		goto end;
 
-	if (_sde_crtc_get_ctlstart_timeout(crtc)) {
-		_sde_crtc_blend_setup(crtc, old_state, false);
-		SDE_ERROR("border fill only commit after ctlstart timeout\n");
-	} else {
-		_sde_crtc_blend_setup(crtc, old_state, true);
-	}
-
+	_sde_crtc_blend_setup(crtc, old_state, true);
 	_sde_crtc_dest_scaler_setup(crtc);
 	cstate = to_sde_crtc_state(crtc->state);
 	idle_time = sde_crtc_get_property(cstate, CRTC_PROP_IDLE_TIMEOUT);
@@ -4351,14 +4325,13 @@ static void _sde_crtc_remove_pipe_flush(struct drm_crtc *crtc)
 }
 
 /**
- * _sde_crtc_reset_hw - attempt hardware reset on errors
+ * sde_crtc_reset_hw - attempt hardware reset on errors
  * @crtc: Pointer to DRM crtc instance
  * @old_state: Pointer to crtc state for previous commit
  * @recovery_events: Whether or not recovery events are enabled
  * Returns: Zero if current commit should still be attempted
  */
-static int _sde_crtc_reset_hw(struct drm_crtc *crtc,
-		struct drm_crtc_state *old_state,
+int sde_crtc_reset_hw(struct drm_crtc *crtc, struct drm_crtc_state *old_state,
 		bool recovery_events)
 {
 	struct drm_plane *plane_halt[MAX_PLANES];
@@ -4556,10 +4529,11 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 	struct msm_drm_private *priv;
 	struct sde_kms *sde_kms;
 	struct sde_crtc_state *cstate;
-	bool is_error, reset_req, recovery_events;
+	bool is_error, reset_req;
 	unsigned long flags;
 	enum sde_crtc_idle_pc_state idle_pc_state;
 	uint32_t fod_sync_info;
+	struct sde_encoder_kickoff_params params = { 0 };
 
 	if (!crtc) {
 		SDE_ERROR("invalid argument\n");
@@ -4596,7 +4570,6 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 	_sde_crtc_mi_update_state(cstate, fod_sync_info);
 
 	list_for_each_entry(encoder, &dev->mode_config.encoder_list, head) {
-		struct sde_encoder_kickoff_params params = { 0 };
 
 		if (encoder->crtc != crtc)
 			continue;
@@ -4611,9 +4584,6 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 		if (sde_encoder_prepare_for_kickoff(encoder, &params))
 			reset_req = true;
 
-		recovery_events =
-			sde_encoder_recovery_events_enabled(encoder);
-
 		if (idle_pc_state != IDLE_PC_NONE)
 			sde_encoder_control_idle_pc(encoder,
 			    (idle_pc_state == IDLE_PC_ENABLE) ? true : false);
@@ -4624,7 +4594,11 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 	 * preparing for the kickoff
 	 */
 	if (reset_req) {
-		if (_sde_crtc_reset_hw(crtc, old_state, recovery_events))
+		sde_crtc->frame_trigger_mode = params.frame_trigger_mode;
+		if (sde_crtc->frame_trigger_mode
+					!= FRAME_DONE_WAIT_POSTED_START &&
+					sde_crtc_reset_hw(crtc, old_state,
+					params.recovery_events_enabled))
 			is_error = true;
 	}
 
