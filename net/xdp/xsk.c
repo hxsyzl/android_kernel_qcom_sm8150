@@ -32,6 +32,12 @@
 #define TX_BATCH_SIZE 16
 
 static DEFINE_PER_CPU(struct list_head, xskmap_flush_list);
+typedef unsigned int __poll_t;
+
+static struct xdp_sock *xdp_sk(struct sock *sk)
+{
+	return (struct xdp_sock *)sk;
+}
 
 bool xsk_is_setup_for_bpf_map(struct xdp_sock *xs)
 {
