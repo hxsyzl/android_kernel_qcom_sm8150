@@ -1154,6 +1154,9 @@ struct proto {
 	void			(*unhash)(struct sock *sk);
 	void			(*rehash)(struct sock *sk);
 	int			(*get_port)(struct sock *sk, unsigned short snum);
+#ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
+	void			(*clear_sk)(struct sock *sk, int size);
+#endif
 
 	/* Keeping track of sockets in use */
 #ifdef CONFIG_PROC_FS
@@ -1587,8 +1590,12 @@ static inline void unlock_sock_fast(struct sock *sk, bool slow)
 
 static inline void sock_owned_by_me(const struct sock *sk)
 {
+#ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
+// nothing
+#else
 #ifdef CONFIG_LOCKDEP
 	WARN_ON_ONCE(!lockdep_sock_is_held(sk) && debug_locks);
+#endif
 #endif
 }
 

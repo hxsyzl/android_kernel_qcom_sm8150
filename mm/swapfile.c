@@ -1034,36 +1034,6 @@ noswap:
 	return n_ret;
 }
 
-#ifdef CONFIG_HSWAP
-unsigned long get_lowest_prio_swapper_space_nrpages()
-{
-	int i;
-	int lp_prio;
-	int lp_index;
-	unsigned long total = 0;
-
-	lp_prio = SHRT_MAX + 1;
-	lp_index = -1;
-
-	for (i = 0; i < nr_swapfiles; ++i) {
-		if ((swap_info[i]->flags & SWP_WRITEOK) &&
-			(swap_info[i]->prio < lp_prio)) {
-			lp_prio = swap_info[i]->prio;
-			lp_index = i;
-		}
-	}
-
-	if (lp_index != -1) {
-		int max = nr_swapper_spaces[lp_index];
-		for (i = 0; i < max; i++) {
-			total += swapper_spaces[lp_index][i].nrpages;
-		}
-		return total;
-	}
-
-	return 0;
-}
-
 int get_lowest_prio_swap_page(int n_goal, bool cluster, swp_entry_t swp_entries[])
 {
 	unsigned long nr_pages = cluster ? SWAPFILE_CLUSTER : 1;
@@ -1173,7 +1143,6 @@ check_out:
 noswap:
 	return n_ret;
 }
-#endif
 
 /* The only caller of this function is now suspend routine */
 swp_entry_t get_swap_page_of_type(int type)
