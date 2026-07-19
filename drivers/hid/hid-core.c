@@ -2692,7 +2692,10 @@ static int hid_device_remove(struct device *dev)
 
 	HID_TOUCH_TRACE();
 
-	down(&hdev->driver_input_lock);
+	if (down_interruptible(&hdev->driver_input_lock)) {
+		ret = -EINTR;
+		goto end;
+	}
 	hdev->io_started = false;
 
 	hdrv = hdev->driver;

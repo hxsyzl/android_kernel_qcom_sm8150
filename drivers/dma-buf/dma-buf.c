@@ -1400,7 +1400,7 @@ static int dma_buf_debug_show(struct seq_file *s, void *unused)
 				buf_obj->size,
 				buf_obj->file->f_flags, buf_obj->file->f_mode,
 				file_count(buf_obj->file),
-				buf_obj->exp_name,
+				buf_obj->exp_name, buf_obj->buf_name,
 				file_inode(buf_obj->file) ? file_inode(buf_obj->file)->i_ino : 0,
 				buf_obj->name ?: "");
 
